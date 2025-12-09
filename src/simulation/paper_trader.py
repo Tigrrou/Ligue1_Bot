@@ -19,14 +19,18 @@ class PaperTrader:
         cursor = conn.cursor()
         ph = self.db.get_placeholder()
 
-        # Lecture sans paramètre -> Pas besoin de ph
+        # Lecture des matchs à venir
         query = '''
             SELECT m.id, m.home_team, m.away_team, m.home_odds, m.draw_odds, m.away_odds
             FROM matches m
             LEFT JOIN bets b ON m.id = b.match_id
             WHERE m.status = 'SCHEDULED' AND b.id IS NULL
         '''
-        rows = cursor.execute(query).fetchall()
+        
+        # --- CORRECTION ICI ---
+        cursor.execute(query)       # 1. On exécute la requête
+        rows = cursor.fetchall()    # 2. On récupère les résultats ensuite
+        # ----------------------
 
         if not rows:
             print("💤 Aucun nouveau match à parier.")
@@ -39,6 +43,7 @@ class PaperTrader:
             match_id, home, away, odd_h, odd_d, odd_a = row
             if odd_h == 0: continue
 
+            # Prédiction
             pred_label, confidence = self.predictor.predict_match(home, away, odd_h, odd_d, odd_a)
             pred_code = pred_label.split(' ')[0] 
             
@@ -47,12 +52,14 @@ class PaperTrader:
             elif pred_code == 'N': odds_taken = odd_d
             elif pred_code == '2': odds_taken = odd_a
 
+            # Filtre Value
             implied_proba = 1 / odds_taken
             margin = 0.05 
             if confidence < (implied_proba + margin):
                 print(f"📉 [NO VALUE] {home}-{away}")
                 continue 
 
+            # Décision RL
             action = self.rl_agent.decide_action(confidence)
             if action == 0:
                 print(f"🛑 [RL SKIP] {home}-{away} (Conf: {confidence:.2f})")
@@ -60,7 +67,7 @@ class PaperTrader:
 
             stake = self.fixed_stake
 
-            # INSERTION DYNAMIQUE
+            # Insertion du pari
             insert_query = f'''
                 INSERT INTO bets (match_id, prediction, confidence, stake, odds_taken, result, bet_date, model_version)
                 VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'PENDING', {ph}, 'V3-Champion')
@@ -69,6 +76,7 @@ class PaperTrader:
             
             print(f"✅ [BET] {home}-{away} : {pred_code} (@{odds_taken})")
 
+            # Notification
             try:
                 msg = f"🚨 **NOUVEAU PARI**\n⚽ {home} vs {away}\n📊 {pred_code} @ {odds_taken}\n🧠 Conf: {confidence:.2f}"
                 self.notifier.send_message(msg)
@@ -83,13 +91,18 @@ class PaperTrader:
         cursor = conn.cursor()
         ph = self.db.get_placeholder()
 
+        # Lecture des résultats
         query = '''
             SELECT b.id, b.prediction, b.stake, b.odds_taken, m.home_score, m.away_score, b.confidence, m.home_team, m.away_team
             FROM bets b
             JOIN matches m ON b.match_id = m.id
             WHERE b.result = 'PENDING' AND m.status = 'FINISHED'
         '''
-        rows = cursor.execute(query).fetchall()
+        
+        # --- CORRECTION ICI AUSSI ---
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        # ----------------------------
 
         if not rows:
             print("⏳ Pas de résultats à traiter.")
@@ -109,10 +122,11 @@ class PaperTrader:
             status = 'WIN' if prediction == actual else 'LOSE'
             profit = (stake * odds) - stake if status == 'WIN' else -stake
 
-            # UPDATE DYNAMIQUE
+            # Update du pari
             update_query = f'UPDATE bets SET result = {ph}, profit = {ph} WHERE id = {ph}'
             cursor.execute(update_query, (status, profit, bet_id))
             
+            # Apprentissage RL
             self.rl_agent.learn(confidence, action=1, reward=profit)
             
             icon = "✅" if status == 'WIN' else "❌"
