@@ -9,3 +9,4 @@ xgboost
 matplotlib
 seaborn
 python-dotenv
+psycopg2-binary
