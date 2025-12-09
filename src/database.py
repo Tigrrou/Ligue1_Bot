@@ -2,6 +2,9 @@ import sqlite3
 import os
 import psycopg2
 from urllib.parse import urlparse
+from dotenv import load_dotenv  # <--- AJOUTER CECI
+
+load_dotenv()
 
 class BettingDB:
     def __init__(self):
