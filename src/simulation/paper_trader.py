@@ -50,7 +50,7 @@ class PaperTrader:
             implied_proba = 1 / odds_taken
             margin = 0.05 
             if confidence < (implied_proba + margin):
-                # print(f"📉 [NO VALUE] {home}-{away}")
+                print(f"📉 [NO VALUE] {home}-{away}")
                 continue 
 
             # 3. DÉCISION RL
