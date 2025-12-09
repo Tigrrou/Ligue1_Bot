@@ -32,9 +32,13 @@ jobs:
 
     - name: 🔄 Mise à jour des données
       run: |
-        # Initialise la DB (crée les tables Postgres si première fois)
+        # 1. On initialise la BDD (Crée les tables si elles n'existent pas)
         python -m src.database
+        
+        # 2. Ensuite on télécharge les matchs
         python -m src.collectors.stats_collector
+        
+        # 3. Et enfin les sentiments
         python -m src.collectors.sentiment_collector
 
     - name: 🤖 Exécution du Trader
