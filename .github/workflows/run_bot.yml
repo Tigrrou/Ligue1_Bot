@@ -1,0 +1,59 @@
+name: Ligue 1 Bot Automation
+
+on:
+  schedule:
+    # ⏰ Cron Job (Heures UTC)
+    # Vendredi à 14h00 UTC (15h/16h FR) pour parier avant les matchs
+    - cron: '0 14 * * 5' 
+    # Lundi à 08h00 UTC (09h/10h FR) pour le bilan
+    - cron: '0 8 * * 1'
+  
+  # Permet aussi de le lancer manuellement depuis GitHub pour tester
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Récupération du code
+      uses: actions/checkout@v3
+
+    - name: 🐍 Installation Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 📦 Installation des dépendances
+      run: |
+        pip install -r requirements.txt
+
+    - name: 🔐 Création du .env (depuis Secrets)
+      run: |
+        echo "TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}" >> .env
+        echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
+
+    - name: 🔄 Mise à jour des données (Stats + Sentiments)
+      run: |
+        python -m src.collectors.stats_collector
+        python -m src.collectors.sentiment_collector
+
+    - name: 🤖 Exécution du Trader (Paris ou Bilan)
+      run: |
+        # Le script paper_trader est intelligent :
+        # - S'il y a des matchs SCHEDULED -> Il parie (Vendredi)
+        # - S'il y a des paris PENDING et matchs FINISHED -> Il fait le bilan (Lundi)
+        python -m src.simulation.paper_trader
+
+    - name: 💾 Sauvegarde de la Base de Données (Commit)
+      # Étape CRUCIALE : On sauvegarde le fichier .db et le json (Q-Table)
+      run: |
+        git config --global user.name "Ligue1 Bot"
+        git config --global user.email "bot@github.com"
+        git add data/betting.db data/q_table.json
+        # On ne commit que s'il y a des changements
+        git commit -m "🤖 Auto-update: DB & Learning" || exit 0
+        git push
